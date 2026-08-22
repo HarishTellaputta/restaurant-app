@@ -56,4 +56,11 @@ public class TableBookingController {
         );
     }
 
+    @GetMapping("/{id}")
+    public TableBookingResponse getBookingById(
+            @PathVariable Long id
+    ) {
+        return bookingService.getBookingById(id);
+    }
+
 }

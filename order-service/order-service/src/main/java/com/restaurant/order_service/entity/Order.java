@@ -21,7 +21,6 @@ public class Order {
     @Column(nullable = false)
     private Long customerId;
 
-    @Column(nullable = false)
     private Long tableId;
 
     // NULL for walk-in orders
