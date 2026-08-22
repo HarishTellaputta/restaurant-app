@@ -1,0 +1,30 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Maven
+target/
+
+# Logs
+*.log
+logs/
+
+# Java
+*.class
+
+# Environment / secrets
+.env
+*.env
+
+# Local Spring configuration
+application-local.properties
+application-local.yml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
