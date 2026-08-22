@@ -111,6 +111,18 @@ public class TableBookingService {
                 .toList();
     }
 
+    public TableBookingResponse getBookingById(Long bookingId) {
+
+        TableBooking booking =
+                bookingRepository.findById(bookingId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Booking not found with id: " + bookingId
+                                )
+                        );
+
+        return mapToResponse(booking);
+    }
 
     // =========================
     // RESPONSE MAPPER
