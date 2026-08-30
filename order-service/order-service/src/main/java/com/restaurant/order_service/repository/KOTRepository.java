@@ -13,10 +13,14 @@ public interface KOTRepository
     Optional<KOT> findByOrderId(Long orderId);
 
     boolean existsByOrderId(Long orderId);
-
-    List<KOT> findByStatusOrderByCreatedAtAsc(
-            KOTStatus status
-    );
-
+    /** * Get all KOTs belonging to an order. */
+    List<KOT> findByOrderIdOrderByCreatedAtAsc( Long orderId );
+    /** * Get final KOT of an order. */
+    Optional<KOT> findByOrderIdAndFinalKotTrue( Long orderId );
+    /** * Check whether final KOT already exists. */
+    boolean existsByOrderIdAndFinalKotTrue( Long orderId );
+    /** * Kitchen KOTs by status. */
+    List<KOT> findByStatusOrderByCreatedAtAsc( KOTStatus status );
+    /** * All KOTs. */
     List<KOT> findAllByOrderByCreatedAtDesc();
 }

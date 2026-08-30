@@ -1,5 +1,6 @@
 package com.restaurant.order_service.controller;
 
+import com.restaurant.order_service.dto.AddDineInItemsRequest;
 import com.restaurant.order_service.dto.CreateOrderRequest;
 import com.restaurant.order_service.dto.OrderResponse;
 import com.restaurant.order_service.dto.UpdateOrderStatusRequest;
@@ -185,6 +186,24 @@ public class OrderController {
         orderService.cancelOrderInternal(id);
 
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{orderId}/dine-in/items")
+    public ResponseEntity<OrderResponse> addDineInItems(
+            @PathVariable Long orderId,
+            @Valid @RequestBody AddDineInItemsRequest request )
+    { return ResponseEntity.ok( orderService.addDineInItems( orderId, request ) );
+    }
+
+    @PostMapping("/{orderId}/dine-in/send-to-kitchen")
+    public ResponseEntity<Long> sendItemsToKitchen(@PathVariable Long orderId, @RequestParam(required = false) String generatedBy) {
+        Long kotId = orderService.sendItemsToKitchen(orderId, generatedBy);
+        return ResponseEntity.status(HttpStatus.CREATED).body(kotId);
+    }
+    // ===================================================== // FINAL SUBMIT DINE-IN ORDER // =====================================================
+    @PutMapping("/{orderId}/dine-in/final-submit")
+    public ResponseEntity<OrderResponse> finalSubmitDineInOrder(@PathVariable Long orderId) {
+        return ResponseEntity.ok(orderService.finalSubmitDineInOrder(orderId));
     }
 }
 

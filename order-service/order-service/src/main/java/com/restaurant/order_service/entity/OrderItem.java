@@ -32,4 +32,13 @@ public class OrderItem {
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal subtotal;
+
+    /**
+     * KOT associated with this item.
+     *
+     * NULL means item has not yet been assigned
+     * to a KOT.
+     */
+    @Column(name = "kot_id")
+    private Long kotId;
 }

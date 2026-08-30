@@ -1,8 +1,10 @@
 package com.restaurant.order_service.controller;
 
 import com.restaurant.order_service.dto.KOTResponse;
+import com.restaurant.order_service.dto.FinalSubmitKOTRequest;
 import com.restaurant.order_service.entity.KOTStatus;
 import com.restaurant.order_service.service.KOTService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,24 +23,42 @@ public class KOTController {
 
 
     // =====================================================
-    // GENERATE KOT
+    // CREATE / GET DRAFT KOT
     // =====================================================
 
-    @PostMapping("/order/{orderId}")
-    public ResponseEntity<KOTResponse> generateKOT(
+    @PostMapping("/order/{orderId}/draft")
+    public ResponseEntity<KOTResponse> createDraftKOT(
             @PathVariable Long orderId,
             @RequestParam(required = false) String generatedBy
     ) {
 
-        KOTResponse response =
-                kotService.generateKOT(
-                        orderId,
-                        generatedBy
-                );
-
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(response);
+                .body(
+                        kotService.getOrCreateDraftKOT(
+                                orderId,
+                                generatedBy
+                        )
+                );
+    }
+
+
+    // =====================================================
+    // FINAL SUBMIT
+    // =====================================================
+
+    @PutMapping("/order/{orderId}/final-submit")
+    public ResponseEntity<KOTResponse> finalSubmitKOT(
+            @PathVariable Long orderId,
+            @Valid @RequestBody FinalSubmitKOTRequest request
+    ) {
+
+        return ResponseEntity.ok(
+                kotService.finalSubmitKOT(
+                        orderId,
+                        request.generatedBy()
+                )
+        );
     }
 
 

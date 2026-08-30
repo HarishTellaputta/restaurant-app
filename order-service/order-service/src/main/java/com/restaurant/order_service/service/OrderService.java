@@ -3,9 +3,9 @@ package com.restaurant.order_service.service;
 import com.restaurant.order_service.client.MenuServiceClient;
 import com.restaurant.order_service.client.RestaurantServiceClient;
 import com.restaurant.order_service.dto.*;
-import com.restaurant.order_service.entity.Order;
-import com.restaurant.order_service.entity.OrderItem;
-import com.restaurant.order_service.entity.OrderStatus;
+import com.restaurant.order_service.entity.*;
+import com.restaurant.order_service.repository.KOTItemRepository;
+import com.restaurant.order_service.repository.KOTRepository;
 import com.restaurant.order_service.repository.OrderItemRepository;
 import com.restaurant.order_service.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 
 @Slf4j
@@ -29,6 +28,8 @@ public class OrderService {
     private final MenuServiceClient menuServiceClient;
     private final RestaurantServiceClient restaurantServiceClient;
     private final DeliveryChargeService deliveryChargeService;
+    private final KOTRepository kotRepository;
+    private final KOTItemRepository kotItemRepository;
 
 
     // =====================================================
@@ -42,423 +43,113 @@ public class OrderService {
     ) {
 
         log.info(
-                "Creating order | customerId={} | tableId={} | tableBooking={} | itemCount={}",
+                "Creating order | customerId={} | orderType={} | tableBooking={}",
                 customerId,
-                request.tableId(),
-                request.tableBooking(),
-                request.items() != null ? request.items().size() : 0
+                request.orderType(),
+                request.tableBooking()
         );
 
-        Long tableId = request.tableId();
-        Boolean tableBooking = request.tableBooking();
+        boolean tableBooking =
+                Boolean.TRUE.equals(request.tableBooking());
 
-        TableBookingResponse booking = null;
-
-
-        // =====================================================
-        // VALIDATE REQUEST
-        // =====================================================
-
-        if (request.items() == null || request.items().isEmpty()) {
-
-            throw new RuntimeException(
-                    "Order must contain at least one item"
-            );
-        }
-
+        Long bookingId = null;
 
         // =====================================================
-        // VALIDATE TABLE BOOKING FLAG
+        // TABLE BOOKING
         // =====================================================
 
-        if (tableBooking != null && tableId == null) {
+        if (tableBooking) {
 
-            log.warn(
-                    "Invalid order request | tableBooking={} without tableId | customerId={}",
-                    tableBooking,
-                    customerId
-            );
+            if (request.orderType() != OrderType.DINE_IN) {
 
-            throw new RuntimeException(
-                    "tableId is required when tableBooking is specified"
-            );
-        }
-
-
-        // =====================================================
-        // TYPE 1:
-        // TABLE BOOKING + PREORDER
-        // =====================================================
-
-        if (Boolean.TRUE.equals(tableBooking)) {
-
-            // -------------------------------------------------
-            // VALIDATE BOOKING DATE
-            // -------------------------------------------------
+                throw new RuntimeException(
+                        "Table booking is allowed only for DINE_IN orders"
+                );
+            }
 
             if (request.bookingDate() == null) {
 
                 throw new RuntimeException(
-                        "bookingDate is required for table booking"
+                        "Booking date is required when table booking is selected"
                 );
             }
-
-
-            // -------------------------------------------------
-            // VALIDATE BOOKING TIME
-            // -------------------------------------------------
 
             if (request.bookingTime() == null) {
 
                 throw new RuntimeException(
-                        "bookingTime is required for table booking"
+                        "Booking time is required when table booking is selected"
                 );
             }
-
-
-            LocalDate bookingDate = request.bookingDate();
-            LocalTime bookingTime = request.bookingTime();
-
-
-            // -------------------------------------------------
-            // VALIDATE BOOKING DATE
-            // -------------------------------------------------
-
-            if (bookingDate.isBefore(LocalDate.now())) {
+            if (request.tableId() == null) {
 
                 throw new RuntimeException(
-                        "bookingDate cannot be in the past"
+                        "tableId is required when table booking is selected"
                 );
             }
-
-
-            // -------------------------------------------------
-            // VALIDATE BOOKING TIME
-            // -------------------------------------------------
-
-            if (
-                    bookingDate.equals(LocalDate.now())
-                            && bookingTime.isBefore(LocalTime.now())
-            ) {
-
-                throw new RuntimeException(
-                        "bookingTime cannot be in the past"
-                );
-            }
-
-
-            // -------------------------------------------------
-            // CREATE TABLE BOOKING
-            // -------------------------------------------------
-
-            log.info(
-                    "Creating table booking | customerId={} | tableId={} | date={} | time={}",
+            TableBookingRequest tableBookingRequest = new TableBookingRequest(
                     customerId,
-                    tableId,
-                    bookingDate,
-                    bookingTime
+                    request.tableId(),
+                    request.bookingDate(),
+                    request.bookingTime(),
+                    4
             );
-
-
-            try {
-
-                TableBookingRequest bookingRequest =
-                        new TableBookingRequest(
-                                customerId,
-                                tableId,
-                                bookingDate,
-                                bookingTime,
-                                2
-                        );
-
-
-                booking =
-                        restaurantServiceClient.createBooking(
-                                bookingRequest
-                        );
-
-
-                if (booking == null) {
-
-                    log.error(
-                            "Restaurant service returned null booking | customerId={} | tableId={}",
-                            customerId,
-                            tableId
-                    );
-
-                    throw new RuntimeException(
-                            "Table booking creation failed"
-                    );
-                }
-
-
-                log.info(
-                        "Table booking created | bookingId={} | customerId={} | tableId={} | status={}",
-                        booking.id(),
-                        booking.customerId(),
-                        booking.tableId(),
-                        booking.status()
-                );
-
-
-            } catch (Exception e) {
-
-                log.error(
-                        "Failed to create table booking | customerId={} | tableId={}",
-                        customerId,
-                        tableId,
-                        e
-                );
-
-                throw new RuntimeException(
-                        "Unable to create table booking: "
-                                + e.getMessage(),
-                        e
-                );
-            }
-
-
             // -------------------------------------------------
-            // CUSTOMER VALIDATION
+            // CALL RESTAURANT SERVICE
             // -------------------------------------------------
 
-            if (
-                    booking.customerId() == null
-                            || !booking.customerId().equals(customerId)
-            ) {
-
-                log.warn(
-                        "Booking ownership validation failed | bookingCustomerId={} | loggedInCustomerId={}",
-                        booking.customerId(),
-                        customerId
-                );
-
-                throw new RuntimeException(
-                        "Created booking does not belong to the logged-in customer"
-                );
-            }
-
-
-            // -------------------------------------------------
-            // TABLE VALIDATION
-            // -------------------------------------------------
-
-            if (
-                    booking.tableId() == null
-                            || !booking.tableId().equals(tableId)
-            ) {
-
-                log.warn(
-                        "Booking table validation failed | bookingTableId={} | requestedTableId={}",
-                        booking.tableId(),
-                        tableId
-                );
-
-                throw new RuntimeException(
-                        "Created booking does not belong to table: "
-                                + tableId
-                );
-            }
-
-
-            // -------------------------------------------------
-            // STATUS VALIDATION
-            // -------------------------------------------------
-
-            if (!"CONFIRMED".equals(booking.status())) {
-
-                log.warn(
-                        "Booking was not confirmed | bookingId={} | status={}",
-                        booking.id(),
-                        booking.status()
-                );
-
-                throw new RuntimeException(
-                        "Table booking was not confirmed. Current status: "
-                                + booking.status()
-                );
-            }
-
-
-            log.info(
-                    "Table booking validation completed | bookingId={} | tableId={}",
-                    booking.id(),
-                    tableId
-            );
+            TableBookingResponse tableBookingResponse= restaurantServiceClient.createBooking(tableBookingRequest);
         }
-
-
-        // =====================================================
-        // BOOKING ID
-        // =====================================================
-
-        Long bookingId =
-                booking != null
-                        ? booking.id()
-                        : null;
 
 
         // =====================================================
         // CREATE ORDER
         // =====================================================
 
-        log.debug(
-                "Creating order entity | customerId={} | tableId={} | bookingId={} | tableBooking={}",
-                customerId,
-                tableId,
-                bookingId,
-                tableBooking
-        );
-
-
         Order order =
                 Order.builder()
                         .customerId(customerId)
-                        .tableId(tableId)
                         .bookingId(bookingId)
+                        .tableBooking(request.tableBooking())
+                        .orderType(request.orderType())
+                        .paymentMethod(request.paymentMethod())
+                        .paymentStatus(
+                                request.paymentMethod() == PaymentMethod.ONLINE
+                                        ? PaymentStatus.PENDING
+                                        : PaymentStatus.PENDING
+                        )
                         .totalAmount(BigDecimal.ZERO)
                         .status(OrderStatus.PLACED)
                         .build();
 
-
         order = orderRepository.save(order);
 
 
-        log.info(
-                "Order created successfully | orderId={} | customerId={} | tableId={} | bookingId={}",
-                order.getId(),
-                customerId,
-                tableId,
-                bookingId
-        );
-
-
         // =====================================================
-        // ADD ORDER ITEMS
+        // CREATE ORDER ITEMS
         // =====================================================
-
-        BigDecimal total = BigDecimal.ZERO;
-
-
-        log.debug(
-                "Processing order items | orderId={} | itemCount={}",
-                order.getId(),
-                request.items().size()
-        );
-
 
         for (CreateOrderItemRequest itemRequest : request.items()) {
 
-            // -------------------------------------------------
-            // ITEM VALIDATION
-            // -------------------------------------------------
-
-            if (itemRequest == null) {
-
-                throw new RuntimeException(
-                        "Order item cannot be null"
-                );
-            }
-
-
-            if (itemRequest.foodItemId() == null) {
-
-                throw new RuntimeException(
-                        "Food item id is required"
-                );
-            }
-
-
-            if (
-                    itemRequest.quantity() == null
-                            || itemRequest.quantity() <= 0
-            ) {
-
-                throw new RuntimeException(
-                        "Food item quantity must be greater than zero"
-                );
-            }
-
-
-            log.debug(
-                    "Fetching food item | orderId={} | foodItemId={} | quantity={}",
-                    order.getId(),
-                    itemRequest.foodItemId(),
-                    itemRequest.quantity()
-            );
-
-
-            FoodItemResponse foodItem;
-
-
-            // -------------------------------------------------
-            // GET FOOD ITEM
-            // -------------------------------------------------
-
-            try {
-
-                foodItem =
-                        menuServiceClient.getFoodItem(
-                                itemRequest.foodItemId()
-                        );
-
-            } catch (Exception e) {
-
-                log.error(
-                        "Failed to fetch food item | orderId={} | foodItemId={}",
-                        order.getId(),
-                        itemRequest.foodItemId(),
-                        e
-                );
-
-                throw new RuntimeException(
-                        "Unable to fetch food item: "
-                                + itemRequest.foodItemId(),
-                        e
-                );
-            }
-
-
-            // -------------------------------------------------
-            // FOOD ITEM VALIDATION
-            // -------------------------------------------------
-
-            if (foodItem == null) {
-
-                throw new RuntimeException(
-                        "Food item not found with id: "
-                                + itemRequest.foodItemId()
-                );
-            }
-
-
-            if (!Boolean.TRUE.equals(foodItem.available())) {
-
-                throw new RuntimeException(
-                        "Food item is not available: "
-                                + foodItem.name()
-                );
-            }
-
-
-            if (foodItem.price() == null) {
-
-                throw new RuntimeException(
-                        "Food item price is missing: "
-                                + foodItem.name()
-                );
-            }
-
-
-            // -------------------------------------------------
-            // PRICE
-            // -------------------------------------------------
-
-            BigDecimal price =
-                    BigDecimal.valueOf(
-                            foodItem.price()
+            FoodItemResponse foodItem =
+                    menuServiceClient.getFoodItem(
+                            itemRequest.foodItemId()
                     );
 
+            if (foodItem == null) {
+                throw new RuntimeException(
+                        "Food item not found: " + itemRequest.foodItemId()
+                );
+            }
+
+            if (!foodItem.available()) {
+                throw new RuntimeException(
+                        "Food item is currently unavailable: "
+                                + foodItem.name()
+                );
+            }
+
+            BigDecimal price =
+                    BigDecimal.valueOf(foodItem.price());
 
             BigDecimal subtotal =
                     price.multiply(
@@ -467,331 +158,28 @@ public class OrderService {
                             )
                     );
 
-
-            // -------------------------------------------------
-            // CREATE ORDER ITEM
-            // -------------------------------------------------
-
-            OrderItem orderItem =
+            OrderItem item =
                     OrderItem.builder()
                             .orderId(order.getId())
                             .foodItemId(foodItem.id())
                             .quantity(itemRequest.quantity())
                             .price(price)
                             .subtotal(subtotal)
+                            .kotId(null)
                             .build();
 
-
-            orderItemRepository.save(orderItem);
-
-
-            log.debug(
-                    "Order item saved | orderId={} | foodItemId={} | quantity={} | price={} | subtotal={}",
-                    order.getId(),
-                    foodItem.id(),
-                    itemRequest.quantity(),
-                    price,
-                    subtotal
-            );
-
-
-            total = total.add(subtotal);
+            orderItemRepository.save(item);
         }
 
 
         // =====================================================
-        // DELIVERY CHARGE
+        // RECALCULATE TOTAL
         // =====================================================
 
-        BigDecimal deliveryCharge =
-                BigDecimal.ZERO;
-
-
-        /*
-         * TABLE ORDER
-         *
-         * If customer is dining in the restaurant,
-         * there is no delivery charge.
-         */
-
-        if (Boolean.TRUE.equals(tableBooking)) {
-
-            log.info(
-                    "Table booking order detected | orderId={} | deliveryCharge=0",
-                    order.getId()
-            );
-
-            deliveryCharge = BigDecimal.ZERO;
-        }
-
-
-        /*
-         * DELIVERY ORDER
-         *
-         * Currently distance/weather services are not available.
-         */
-
-        else {
-
-            Double distanceKm = null;
-            String weatherCondition = null;
-            Boolean peakTime = false;
-
-
-            // -------------------------------------------------
-            // DISTANCE
-            // -------------------------------------------------
-
-            try {
-
-                /*
-                 * FUTURE:
-                 *
-                 * distanceKm =
-                 *      locationService.calculateDistance(...);
-                 *
-                 * Currently unavailable.
-                 */
-
-                log.debug(
-                        "Distance service not available yet | orderId={}",
-                        order.getId()
-                );
-
-            } catch (Exception e) {
-
-                log.warn(
-                        "Unable to calculate delivery distance | orderId={}. Continuing without distance charge.",
-                        order.getId(),
-                        e
-                );
-
-                distanceKm = null;
-            }
-
-
-            // -------------------------------------------------
-            // WEATHER
-            // -------------------------------------------------
-
-            try {
-
-                /*
-                 * FUTURE:
-                 *
-                 * weatherCondition =
-                 *      weatherService.getCurrentWeather(...);
-                 *
-                 * Currently unavailable.
-                 */
-
-                log.debug(
-                        "Weather service not available yet | orderId={}",
-                        order.getId()
-                );
-
-            } catch (Exception e) {
-
-                log.warn(
-                        "Unable to fetch weather information | orderId={}. Continuing without weather charge.",
-                        order.getId(),
-                        e
-                );
-
-                weatherCondition = null;
-            }
-
-
-            // -------------------------------------------------
-            // PEAK TIME
-            // -------------------------------------------------
-
-            try {
-
-                /*
-                 * FUTURE:
-                 *
-                 * peakTime =
-                 *      deliveryPricingService.isPeakTime(...);
-                 *
-                 * Currently unavailable.
-                 */
-
-                peakTime = false;
-
-                log.debug(
-                        "Peak-time service not available yet | orderId={}",
-                        order.getId()
-                );
-
-            } catch (Exception e) {
-
-                log.warn(
-                        "Unable to determine peak time | orderId={}. Continuing without peak charge.",
-                        order.getId(),
-                        e
-                );
-
-                peakTime = false;
-            }
-
-
-            // =================================================
-            // BASE DELIVERY CHARGE
-            // =================================================
-
-            BigDecimal baseDeliveryCharge =
-                    BigDecimal.ZERO;
-
-
-            if (distanceKm != null && distanceKm > 0) {
-
-                /*
-                 * FUTURE PRICING EXAMPLE:
-                 *
-                 * First 3 KM  = ₹30
-                 * Every extra KM = ₹10
-                 */
-
-                if (distanceKm <= 3) {
-
-                    baseDeliveryCharge =
-                            BigDecimal.valueOf(30);
-
-                } else {
-
-                    double extraKm =
-                            distanceKm - 3;
-
-                    baseDeliveryCharge =
-                            BigDecimal.valueOf(30)
-                                    .add(
-                                            BigDecimal.valueOf(
-                                                    extraKm * 10
-                                            )
-                                    );
-                }
-            }
-
-
-            // =================================================
-            // PEAK CHARGE
-            // =================================================
-
-            BigDecimal peakCharge =
-                    BigDecimal.ZERO;
-
-
-            if (Boolean.TRUE.equals(peakTime)) {
-
-                peakCharge =
-                        BigDecimal.valueOf(20);
-            }
-
-
-            // =================================================
-            // WEATHER CHARGE
-            // =================================================
-
-            BigDecimal weatherCharge =
-                    BigDecimal.ZERO;
-
-
-            if (weatherCondition != null) {
-
-                String weather =
-                        weatherCondition.toLowerCase();
-
-
-                if (
-                        weather.contains("rain")
-                                || weather.contains("storm")
-                ) {
-
-                    weatherCharge =
-                            BigDecimal.valueOf(20);
-                }
-            }
-
-
-            // =================================================
-            // TOTAL DELIVERY CHARGE
-            // =================================================
-
-            deliveryCharge =
-                    baseDeliveryCharge
-                            .add(peakCharge)
-                            .add(weatherCharge);
-
-
-            log.info(
-                    "Delivery charge calculated | orderId={} | distance={} | weather={} | peakTime={} | base={} | peak={} | weatherCharge={} | total={}",
-                    order.getId(),
-                    distanceKm,
-                    weatherCondition,
-                    peakTime,
-                    baseDeliveryCharge,
-                    peakCharge,
-                    weatherCharge,
-                    deliveryCharge
-            );
-        }
-
-
-        // =====================================================
-        // FINAL ORDER TOTAL
-        // =====================================================
-
-        BigDecimal grandTotal =
-                total.add(deliveryCharge);
-
-
-        // =====================================================
-        // UPDATE ORDER TOTAL
-        // =====================================================
-
-        order.setTotalAmount(grandTotal);
-
-
-        /*
-         * If Order entity contains deliveryCharge,
-         * you can add:
-         *
-         * order.setDeliveryCharge(deliveryCharge);
-         */
-
-
-        order =
-                orderRepository.save(order);
-
-
-        log.info(
-                "Order total updated | orderId={} | itemTotal={} | deliveryCharge={} | grandTotal={}",
-                order.getId(),
-                total,
-                deliveryCharge,
-                grandTotal
-        );
-
-
-        // =====================================================
-        // COMPLETE
-        // =====================================================
-
-        log.info(
-                "Order creation completed successfully | orderId={} | customerId={} | bookingId={} | itemTotal={} | deliveryCharge={} | totalAmount={}",
-                order.getId(),
-                customerId,
-                bookingId,
-                total,
-                deliveryCharge,
-                grandTotal
-        );
-
+        recalculateOrderTotal(order);
 
         return buildOrderResponse(order);
     }
-
 
     // =====================================================
     // GET ORDER BY ID
@@ -1029,7 +417,8 @@ public class OrderService {
                 order.getTotalAmount(),
                 order.getStatus(),
                 order.getCreatedAt(),
-                items
+                items,
+                order.getUpdatedAt()
         );
     }
 
@@ -1522,4 +911,393 @@ public class OrderService {
                 .map(this::buildOrderResponse)
                 .toList();
     }
+
+    // =====================================================
+    // ADD DINE-IN ITEMS
+    // =====================================================
+    @Transactional
+    public OrderResponse addDineInItems(
+            Long orderId,
+            AddDineInItemsRequest request
+    ) {
+
+        log.info(
+                "Adding dine-in items | orderId={}",
+                orderId
+        );
+
+        Order order = getOrder(orderId);
+
+        // -------------------------------------------------
+        // DINE-IN ONLY
+        // -------------------------------------------------
+
+        if (order.getOrderType() != OrderType.DINE_IN) {
+            throw new RuntimeException(
+                    "Items can be added only for DINE_IN orders"
+            );
+        }
+
+        // -------------------------------------------------
+        // FINAL SUBMIT CHECK
+        // -------------------------------------------------
+
+        if (order.isFinalSubmitted()) {
+            throw new RuntimeException(
+                    "Order is already final submitted. " +
+                            "No more items can be added."
+            );
+        }
+
+        // -------------------------------------------------
+        // ORDER STATUS CHECK
+        // -------------------------------------------------
+
+        if (
+                order.getStatus() == OrderStatus.COMPLETED ||
+                        order.getStatus() == OrderStatus.CANCELLED
+        ) {
+            throw new RuntimeException(
+                    "Cannot add items to order with status: "
+                            + order.getStatus()
+            );
+        }
+
+        // -------------------------------------------------
+        // ADD ITEMS
+        // -------------------------------------------------
+
+        for (AddDineInItemsRequest.ItemRequest itemRequest
+                : request.items()) {
+
+            if (
+                    itemRequest.foodItemId() == null ||
+                            itemRequest.quantity() == null ||
+                            itemRequest.quantity() <= 0 ||
+                            itemRequest.price() == null ||
+                            itemRequest.price().compareTo(BigDecimal.ZERO) < 0
+            ) {
+                throw new RuntimeException(
+                        "Invalid item details"
+                );
+            }
+
+            BigDecimal subtotal =
+                    itemRequest.price()
+                            .multiply(
+                                    BigDecimal.valueOf(
+                                            itemRequest.quantity()
+                                    )
+                            );
+
+            OrderItem item =
+                    OrderItem.builder()
+                            .orderId(order.getId())
+                            .foodItemId(
+                                    itemRequest.foodItemId()
+                            )
+                            .quantity(
+                                    itemRequest.quantity()
+                            )
+                            .price(
+                                    itemRequest.price()
+                            )
+                            .subtotal(subtotal)
+                            .kotId(null)
+                            .build();
+
+            orderItemRepository.save(item);
+        }
+
+        // -------------------------------------------------
+        // RECALCULATE TOTAL
+        // -------------------------------------------------
+
+        recalculateOrderTotal(order);
+
+        log.info(
+                "Dine-in items added | orderId={}",
+                orderId
+        );
+
+        return buildOrderResponse(order);
+    }
+
+
+// =====================================================
+// SEND UNSENT ITEMS TO KITCHEN
+// =====================================================
+
+    @Transactional
+    public Long sendItemsToKitchen(
+            Long orderId,
+            String generatedBy
+    ) {
+
+        log.info(
+                "Sending dine-in items to kitchen | orderId={}",
+                orderId
+        );
+
+        Order order = getOrder(orderId);
+
+        // -------------------------------------------------
+        // DINE-IN ONLY
+        // -------------------------------------------------
+
+        if (order.getOrderType() != OrderType.DINE_IN) {
+            throw new RuntimeException(
+                    "KOT is allowed only for DINE_IN orders"
+            );
+        }
+
+        // -------------------------------------------------
+        // FINAL SUBMIT CHECK
+        // -------------------------------------------------
+
+        if (order.isFinalSubmitted()) {
+            throw new RuntimeException(
+                    "Order already final submitted"
+            );
+        }
+
+        // -------------------------------------------------
+        // FIND ONLY NEW ITEMS
+        // -------------------------------------------------
+
+        List<OrderItem> unsentItems =
+                orderItemRepository
+                        .findByOrderIdAndKotIdIsNull(
+                                orderId
+                        );
+
+        if (unsentItems.isEmpty()) {
+            throw new RuntimeException(
+                    "No new items available to send to kitchen"
+            );
+        }
+
+        // -------------------------------------------------
+        // CREATE KOT
+        // -------------------------------------------------
+
+        KOT kot =
+                KOT.builder()
+                        .orderId(order.getId())
+                        .tableId(order.getTableId())
+                        .status(KOTStatus.GENERATED)
+                        .generatedBy(
+                                generatedBy == null ||
+                                        generatedBy.isBlank()
+                                        ? "STAFF"
+                                        : generatedBy
+                        )
+                        .finalKot(false)
+                        .build();
+
+        kot = kotRepository.save(kot);
+
+        // -------------------------------------------------
+        // CREATE KOT ITEMS
+        // -------------------------------------------------
+
+        for (OrderItem orderItem : unsentItems) {
+
+            KOTItem kotItem =
+                    KOTItem.builder()
+                            .kotId(kot.getId())
+                            .orderItemId(
+                                    orderItem.getId()
+                            )
+                            .foodItemId(
+                                    orderItem.getFoodItemId()
+                            )
+                            .quantity(
+                                    orderItem.getQuantity()
+                            )
+                            .price(
+                                    orderItem.getPrice()
+                            )
+                            .subtotal(
+                                    orderItem.getSubtotal()
+                            )
+                            .build();
+
+            kotItemRepository.save(kotItem);
+
+            // ---------------------------------------------
+            // MARK ORDER ITEM AS SENT
+            // ---------------------------------------------
+
+            orderItem.setKotId(kot.getId());
+
+            orderItemRepository.save(orderItem);
+        }
+
+        // -------------------------------------------------
+        // ORDER STATUS
+        // -------------------------------------------------
+
+        if (order.getStatus() == OrderStatus.PLACED) {
+
+            order.setStatus(
+                    OrderStatus.ACCEPTED
+            );
+
+            orderRepository.save(order);
+        }
+
+        log.info(
+                "KOT created | kotId={} | orderId={} | items={}",
+                kot.getId(),
+                orderId,
+                unsentItems.size()
+        );
+
+        return kot.getId();
+    }
+
+
+// =====================================================
+// FINAL SUBMIT DINE-IN ORDER
+// =====================================================
+
+    @Transactional
+    public OrderResponse finalSubmitDineInOrder(
+            Long orderId
+    ) {
+
+        log.info(
+                "Final submitting dine-in order | orderId={}",
+                orderId
+        );
+
+        Order order = getOrder(orderId);
+
+        // -------------------------------------------------
+        // DINE-IN ONLY
+        // -------------------------------------------------
+
+        if (order.getOrderType() != OrderType.DINE_IN) {
+            throw new RuntimeException(
+                    "Final submit is available only for DINE_IN orders"
+            );
+        }
+
+        // -------------------------------------------------
+        // ALREADY SUBMITTED
+        // -------------------------------------------------
+
+        if (order.isFinalSubmitted()) {
+            throw new RuntimeException(
+                    "Order is already final submitted"
+            );
+        }
+
+        // -------------------------------------------------
+        // CHECK ITEMS
+        // -------------------------------------------------
+
+        List<OrderItem> allItems =
+                orderItemRepository.findByOrderId(orderId);
+
+        if (allItems.isEmpty()) {
+            throw new RuntimeException(
+                    "Cannot final submit an empty order"
+            );
+        }
+
+        // -------------------------------------------------
+        // CHECK UNSENT ITEMS
+        // -------------------------------------------------
+
+        List<OrderItem> unsentItems =
+                orderItemRepository
+                        .findByOrderIdAndKotIdIsNull(
+                                orderId
+                        );
+
+        if (!unsentItems.isEmpty()) {
+
+            throw new RuntimeException(
+                    "Some items have not been sent to kitchen. " +
+                            "Send items to kitchen before final submit."
+            );
+        }
+
+        // -------------------------------------------------
+        // FINAL SUBMIT
+        // -------------------------------------------------
+
+        order.setFinalSubmitted(true);
+
+        /*
+         * IMPORTANT:
+         *
+         * Do NOT set READY here.
+         *
+         * READY means kitchen has completed preparation.
+         * FINAL SUBMITTED means customer/staff has finished
+         * ordering and no more items can be added.
+         */
+
+        recalculateOrderTotal(order);
+
+        order = orderRepository.save(order);
+
+        log.info(
+                "Dine-in order final submitted | orderId={} | total={}",
+                orderId,
+                order.getTotalAmount()
+        );
+
+        return buildOrderResponse(order);
+    }
+
+
+// =====================================================
+// RECALCULATE ORDER TOTAL
+// =====================================================
+
+    private void recalculateOrderTotal(
+            Order order
+    ) {
+
+        List<OrderItem> items =
+                orderItemRepository.findByOrderId(
+                        order.getId()
+                );
+
+        BigDecimal total =
+                items.stream()
+                        .map(OrderItem::getSubtotal)
+                        .reduce(
+                                BigDecimal.ZERO,
+                                BigDecimal::add
+                        );
+
+        order.setTotalAmount(total);
+
+        orderRepository.save(order);
+    }
+
+
+// =====================================================
+// GET ORDER
+// =====================================================
+
+    private Order getOrder(
+            Long orderId
+    ) {
+
+        return orderRepository
+                .findById(orderId)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Order not found with id: "
+                                        + orderId
+                        )
+                );
+    }
+
 }
