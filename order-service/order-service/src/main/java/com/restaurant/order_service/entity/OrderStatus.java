@@ -3,10 +3,22 @@ package com.restaurant.order_service.entity;
 public enum OrderStatus {
 
     PLACED,
-    CONFIRMED,
+
+    ACCEPTED,
+
     PREPARING,
+
     READY,
+
+    DELIVERY_ASSIGNED,
+
+    PICKED_UP,
+
+    OUT_FOR_DELIVERY,
+
+    DELIVERED,
+
     COMPLETED,
-    CANCELLED,
-    ACCEPTED
+
+    CANCELLED
 }

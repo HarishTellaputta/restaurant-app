@@ -7,6 +7,7 @@ import com.restaurant.restaurant_service.service.RestaurantTableService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -62,10 +63,15 @@ public class RestaurantTableController {
 
     @PutMapping("/{id}/status")
     public RestaurantTableResponse updateTableStatus(
+            Authentication authentication,
             @PathVariable Long id,
             @Valid @RequestBody TableStatusRequest request
     ) {
 
+
+        System.out.println("========== UPDATE TABLE STATUS ==========");
+        System.out.println("TABLE ID: " + id);
+        System.out.println("STATUS: " + request.status());
         return tableService.updateTableStatus(
                 id,
                 request

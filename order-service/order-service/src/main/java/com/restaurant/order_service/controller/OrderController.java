@@ -2,12 +2,12 @@ package com.restaurant.order_service.controller;
 
 import com.restaurant.order_service.dto.CreateOrderRequest;
 import com.restaurant.order_service.dto.OrderResponse;
-import com.restaurant.order_service.dto.UpdateOrderStatusRequest;
 import com.restaurant.order_service.entity.OrderStatus;
 import com.restaurant.order_service.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,9 +20,13 @@ public class OrderController {
 
     private final OrderService orderService;
 
+
+    // =====================================================
+    // CREATE ORDER
+    // =====================================================
+
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public OrderResponse createOrder(
+    public ResponseEntity<OrderResponse> createOrder(
             Authentication authentication,
             @Valid @RequestBody CreateOrderRequest request
     ) {
@@ -30,14 +34,24 @@ public class OrderController {
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        return orderService.createOrder(
-                customerId,
-                request
-        );
+        OrderResponse response =
+                orderService.createOrder(
+                        customerId,
+                        request
+                );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
     }
+
+
+    // =====================================================
+    // GET ORDER BY ID
+    // =====================================================
 
     @GetMapping("/{id}")
-    public OrderResponse getOrderById(
+    public ResponseEntity<OrderResponse> getOrderById(
             @PathVariable Long id,
             Authentication authentication
     ) {
@@ -45,25 +59,39 @@ public class OrderController {
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        return orderService.getOrderById(
-                id,
-                customerId
+        return ResponseEntity.ok(
+                orderService.getOrderById(
+                        id,
+                        customerId
+                )
         );
     }
+
+
+    // =====================================================
+    // MY ORDERS
+    // =====================================================
 
     @GetMapping("/my-orders")
-    public List<OrderResponse> getMyOrders(
+    public ResponseEntity<List<OrderResponse>> getMyOrders(
             Authentication authentication
     ) {
 
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        return orderService.getMyOrders(customerId);
+        return ResponseEntity.ok(
+                orderService.getMyOrders(customerId)
+        );
     }
 
+
+    // =====================================================
+    // ORDER STATUS
+    // =====================================================
+
     @GetMapping("/{id}/status")
-    public OrderStatus getOrderStatus(
+    public ResponseEntity<OrderStatus> getOrderStatus(
             @PathVariable Long id,
             Authentication authentication
     ) {
@@ -71,15 +99,21 @@ public class OrderController {
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        return orderService.getOrderStatus(
-                id,
-                customerId
+        return ResponseEntity.ok(
+                orderService.getOrderStatus(
+                        id,
+                        customerId
+                )
         );
     }
 
+
+    // =====================================================
+    // CANCEL ORDER
+    // =====================================================
+
     @PutMapping("/{id}/cancel")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void cancelOrder(
+    public ResponseEntity<Void> cancelOrder(
             @PathVariable Long id,
             Authentication authentication
     ) {
@@ -91,17 +125,44 @@ public class OrderController {
                 id,
                 customerId
         );
+
+        return ResponseEntity.noContent().build();
     }
 
-    @PutMapping("/{id}/status")
-    public OrderResponse updateOrderStatus(
-            @PathVariable Long id,
-            @Valid @RequestBody UpdateOrderStatusRequest request
+
+    // =====================================================
+    // GET ORDER BY BOOKING
+    // =====================================================
+
+    @GetMapping("/booking/{bookingId}")
+    public ResponseEntity<OrderResponse> getOrderByBookingId(
+            @PathVariable Long bookingId,
+            Authentication authentication
     ) {
 
-        return orderService.updateOrderStatus(
-                id,
-                request.status()
+        Long customerId =
+                (Long) authentication.getPrincipal();
+
+        return ResponseEntity.ok(
+                orderService.getOrderByBookingId(
+                        bookingId,
+                        customerId
+                )
         );
+    }
+
+
+    // =====================================================
+    // INTERNAL CANCEL
+    // =====================================================
+
+    @PutMapping("/internal/{id}/cancel")
+    public ResponseEntity<Void> cancelBookingOrder(
+            @PathVariable Long id
+    ) {
+
+        orderService.cancelOrderInternal(id);
+
+        return ResponseEntity.noContent().build();
     }
 }
