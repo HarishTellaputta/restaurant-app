@@ -3,12 +3,14 @@ package com.restaurant.order_service.security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -28,14 +30,40 @@ public class SecurityConfig {
                         )
                 )
 
-                .authorizeHttpRequests(auth ->
-                        auth
-                                .requestMatchers(
-                                        "/api/orders/**"
-                                )
-                                .authenticated()
-                                .anyRequest()
-                                .permitAll()
+                .authorizeHttpRequests(auth -> auth
+
+                        // =====================================
+                        // INTERNAL APIs
+                        // =====================================
+
+                        .requestMatchers(
+                                "/api/orders/booking/**",
+                                "/api/orders/internal/**"
+                        ).permitAll()
+
+
+                        // =====================================
+                        // ADMIN APIs
+                        // =====================================
+
+                        .requestMatchers("/api/admin/orders/**")
+                        .hasRole("ADMIN")
+
+
+                        // =====================================
+                        // CUSTOMER ORDER APIs
+                        // =====================================
+
+                        .requestMatchers("/api/orders/**")
+                        .authenticated()
+
+
+                        // =====================================
+                        // OTHER APIs
+                        // =====================================
+
+                        .anyRequest()
+                        .permitAll()
                 )
 
                 .addFilterBefore(

@@ -29,7 +29,7 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/table-bookings/**")
+                        .requestMatchers("/api/table-booking/**")
                         .authenticated()
 
                         .requestMatchers("/api/tables/**")

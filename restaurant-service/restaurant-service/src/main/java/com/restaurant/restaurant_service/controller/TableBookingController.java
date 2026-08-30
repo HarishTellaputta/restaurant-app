@@ -2,7 +2,6 @@ package com.restaurant.restaurant_service.controller;
 
 import com.restaurant.restaurant_service.dto.TableBookingRequest;
 import com.restaurant.restaurant_service.dto.TableBookingResponse;
-import com.restaurant.restaurant_service.dto.TableStatusRequest;
 import com.restaurant.restaurant_service.service.TableBookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +21,6 @@ public class TableBookingController {
     // =====================================================
     // CUSTOMER - CREATE BOOKING
     // =====================================================
-
     @PostMapping
     public TableBookingResponse createBooking(
             Authentication authentication,
@@ -38,29 +36,31 @@ public class TableBookingController {
         );
     }
 
-
     // =====================================================
     // CUSTOMER - MY BOOKINGS
     // =====================================================
 
     @GetMapping("/my-bookings")
     public List<TableBookingResponse> getMyBookings(
-            Authentication authentication
+            org.springframework.security.core.Authentication authentication
     ) {
 
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        return bookingService.getMyBookings(
-                customerId
-        );
+        return bookingService.getMyBookings(customerId);
     }
+
+
+    // =====================================================
+    // GET BOOKING BY ID
+    // =====================================================
 
     @GetMapping("/{id}")
     public TableBookingResponse getBookingById(
             @PathVariable Long id
     ) {
+
         return bookingService.getBookingById(id);
     }
-
 }
