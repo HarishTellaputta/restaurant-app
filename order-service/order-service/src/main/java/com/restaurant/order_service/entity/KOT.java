@@ -1,21 +1,14 @@
-package com.restaurant.order_service.entity;
 
+        package com.restaurant.order_service.entity;
 
+import com.restaurant.order_service.entity.KOTStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-        name = "kots",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_kot_order",
-                        columnNames = "order_id"
-                )
-        }
-)
+@Table(name = "kots")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -28,22 +21,20 @@ public class KOT {
     private Long id;
 
     /**
-     * Order associated with this KOT.
+     * Dine-in order associated with this KOT.
+     *
+     * One order can have multiple KOTs.
      */
-    @Column(
-            name = "order_id",
-            nullable = false
-    )
+    @Column(name = "order_id", nullable = false)
     private Long orderId;
 
     /**
      * Restaurant table.
-     * Null for delivery orders.
      */
     private Long tableId;
 
     /**
-     * Current KOT status.
+     * KOT status.
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -52,17 +43,28 @@ public class KOT {
     /**
      * Who generated the KOT.
      *
-     * Example:
-     * MANAGER
-     * RECEPTION
+     * Examples:
+     * STAFF
      * POS
+     * ADMIN
      */
     private String generatedBy;
+
+    /**
+     * Indicates whether this is the final KOT
+     * generated when staff completes the dine-in order.
+     */
+    @Column(nullable = false)
+    private boolean finalKot;
 
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
 
+    /**
+     * Time when this KOT was submitted to kitchen.
+     */
+    private LocalDateTime submittedAt;
 
     @PrePersist
     protected void onCreate() {
@@ -75,10 +77,10 @@ public class KOT {
         }
     }
 
-
     @PreUpdate
     protected void onUpdate() {
 
         updatedAt = LocalDateTime.now();
     }
 }
+

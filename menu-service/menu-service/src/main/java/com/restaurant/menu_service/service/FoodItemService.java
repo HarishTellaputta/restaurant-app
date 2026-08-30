@@ -79,18 +79,22 @@ public class FoodItemService {
 
     public FoodItemResponse getFoodItemById(Long id) {
 
-        FoodItem foodItem =
-                foodItemRepository.findById(id)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Food item not found with id: "
-                                                + id
-                                )
-                        );
+        FoodItem foodItem = foodItemRepository.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Food item not found: " + id)
+                );
 
-        return responseMapper(foodItem);
+        return new FoodItemResponse(
+                foodItem.getId(),
+                foodItem.getName(),
+                foodItem.getDescription(),
+                foodItem.getPrice(),
+                foodItem.getImageUrl(),
+                foodItem.getAvailable(),
+                foodItem.getCategory().getId(),
+                foodItem.getCategory().getName()
+        );
     }
-
 
     // =========================
     // UPDATE

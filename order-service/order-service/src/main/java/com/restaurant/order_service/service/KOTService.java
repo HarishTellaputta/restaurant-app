@@ -1,17 +1,18 @@
 package com.restaurant.order_service.service;
 
+import com.restaurant.order_service.dto.KOTItemResponse;
 import com.restaurant.order_service.dto.KOTResponse;
-import com.restaurant.order_service.entity.KOT;
-import com.restaurant.order_service.entity.KOTStatus;
-import com.restaurant.order_service.entity.Order;
-import com.restaurant.order_service.entity.OrderStatus;
+import com.restaurant.order_service.entity.*;
+import com.restaurant.order_service.repository.KOTItemRepository;
 import com.restaurant.order_service.repository.KOTRepository;
+import com.restaurant.order_service.repository.OrderItemRepository;
 import com.restaurant.order_service.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -20,109 +21,168 @@ import java.util.List;
 public class KOTService {
 
     private final KOTRepository kotRepository;
+    private final KOTItemRepository kotItemRepository;
     private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
 
 
     // =====================================================
-    // GENERATE KOT
+    // GET OR CREATE DRAFT KOT
     // =====================================================
 
     @Transactional
-    public KOTResponse generateKOT(
+    public KOTResponse getOrCreateDraftKOT(
+            Long orderId,
+            String generatedBy
+    ) {
+
+        Order order = getOrder(orderId);
+
+        validateDineInOrder(order);
+
+        KOT kot =
+                kotRepository
+                        .findByOrderId(orderId)
+                        .orElse(null);
+
+        if (kot != null) {
+
+            if (kot.getStatus() != KOTStatus.DRAFT) {
+
+                throw new RuntimeException(
+                        "KOT is already finalized. Status: "
+                                + kot.getStatus()
+                );
+            }
+
+            return buildResponse(kot);
+        }
+
+        if (generatedBy == null || generatedBy.isBlank()) {
+            generatedBy = "STAFF";
+        }
+
+        kot =
+                KOT.builder()
+                        .orderId(order.getId())
+                        .tableId(order.getTableId())
+                        .status(KOTStatus.DRAFT)
+                        .generatedBy(generatedBy)
+                        .build();
+
+        kot = kotRepository.save(kot);
+
+        log.info(
+                "Draft KOT created | kotId={} | orderId={}",
+                kot.getId(),
+                orderId
+        );
+
+        return buildResponse(kot);
+    }
+
+
+    // =====================================================
+    // FINAL SUBMIT KOT
+    // =====================================================
+
+    @Transactional
+    public KOTResponse finalSubmitKOT(
             Long orderId,
             String generatedBy
     ) {
 
         log.info(
-                "Generating KOT | orderId={} | generatedBy={}",
-                orderId,
-                generatedBy
+                "Final submitting KOT | orderId={}",
+                orderId
         );
 
+        Order order = getOrder(orderId);
 
-        // -------------------------------------------------
-        // FIND ORDER
-        // -------------------------------------------------
+        validateDineInOrder(order);
 
-        Order order =
-                orderRepository.findById(orderId)
+        KOT kot =
+                kotRepository
+                        .findByOrderId(orderId)
                         .orElseThrow(() ->
                                 new RuntimeException(
-                                        "Order not found with id: "
+                                        "Draft KOT not found for order: "
                                                 + orderId
                                 )
                         );
 
-
-        // -------------------------------------------------
-        // ORDER STATUS VALIDATION
-        // -------------------------------------------------
-
-        if (order.getStatus() != OrderStatus.ACCEPTED) {
+        if (kot.getStatus() != KOTStatus.DRAFT) {
 
             throw new RuntimeException(
-                    "KOT can be generated only for an ACCEPTED order. "
-                            + "Current status: "
-                            + order.getStatus()
+                    "KOT cannot be finalized from status: "
+                            + kot.getStatus()
             );
         }
 
+        List<OrderItem> orderItems =
+                orderItemRepository.findByOrderId(orderId);
 
-        // -------------------------------------------------
-        // CHECK EXISTING KOT
-        // -------------------------------------------------
-
-        if (kotRepository.existsByOrderId(orderId)) {
-
-            log.warn(
-                    "KOT already exists | orderId={}",
-                    orderId
-            );
+        if (orderItems.isEmpty()) {
 
             throw new RuntimeException(
-                    "KOT already exists for order: "
-                            + orderId
+                    "Cannot final submit KOT without items"
             );
         }
 
+        /*
+         * Remove existing KOT items.
+         *
+         * This makes the KOT contain the latest complete
+         * order items at final submission.
+         */
+        kotItemRepository.deleteByKotId(kot.getId());
 
-        // -------------------------------------------------
-        // VALIDATE GENERATED BY
-        // -------------------------------------------------
+        for (OrderItem orderItem : orderItems) {
 
-        if (
-                generatedBy == null
-                        || generatedBy.isBlank()
-        ) {
+            KOTItem kotItem =
+                    KOTItem.builder()
+                            .kotId(kot.getId())
+                            .foodItemId(orderItem.getFoodItemId())
+                            .quantity(orderItem.getQuantity())
+                            .build();
 
-            generatedBy = "RESTAURANT_STAFF";
+            kotItemRepository.save(kotItem);
         }
 
+        if (generatedBy == null || generatedBy.isBlank()) {
+            generatedBy = "STAFF";
+        }
 
-        // -------------------------------------------------
-        // CREATE KOT
-        // -------------------------------------------------
+        kot.setGeneratedBy(generatedBy);
 
-        KOT kot =
-                KOT.builder()
-                        .orderId(order.getId())
-                        .tableId(order.getTableId())
-                        .status(KOTStatus.GENERATED)
-                        .generatedBy(generatedBy)
-                        .build();
-
-
-        kot =
-                kotRepository.save(kot);
-
-
-        log.info(
-                "KOT generated successfully | kotId={} | orderId={} | status={}",
-                kot.getId(),
-                kot.getOrderId(),
-                kot.getStatus()
+        kot.setStatus(
+                KOTStatus.GENERATED
         );
 
+        kot.setSubmittedAt(
+                LocalDateTime.now()
+        );
+
+        kot = kotRepository.save(kot);
+
+        /*
+         * Order moves to ACCEPTED first.
+         * Then kitchen can move it to PREPARING.
+         */
+        if (order.getStatus() == OrderStatus.PLACED) {
+
+            order.setStatus(
+                    OrderStatus.ACCEPTED
+            );
+
+            orderRepository.save(order);
+        }
+
+        log.info(
+                "KOT final submitted | kotId={} | orderId={}",
+                kot.getId(),
+                orderId
+        );
 
         return buildResponse(kot);
     }
@@ -137,15 +197,7 @@ public class KOTService {
             Long kotId
     ) {
 
-        log.info(
-                "Starting KOT preparation | kotId={}",
-                kotId
-        );
-
-
-        KOT kot =
-                getKOT(kotId);
-
+        KOT kot = getKOT(kotId);
 
         if (kot.getStatus() != KOTStatus.GENERATED) {
 
@@ -155,29 +207,16 @@ public class KOTService {
             );
         }
 
+        Order order =
+                getOrder(kot.getOrderId());
+
+        validateDineInOrder(order);
 
         kot.setStatus(
                 KOTStatus.PREPARING
         );
 
-
-        kot =
-                kotRepository.save(kot);
-
-
-        log.info(
-                "KOT moved to PREPARING | kotId={}",
-                kotId
-        );
-
-
-        // -------------------------------------------------
-        // UPDATE ORDER STATUS
-        // -------------------------------------------------
-
-        Order order =
-                getOrder(kot.getOrderId());
-
+        kot = kotRepository.save(kot);
 
         if (order.getStatus() != OrderStatus.ACCEPTED) {
 
@@ -187,27 +226,24 @@ public class KOTService {
             );
         }
 
-
         order.setStatus(
                 OrderStatus.PREPARING
         );
 
-
         orderRepository.save(order);
 
-
         log.info(
-                "Order moved to PREPARING | orderId={}",
+                "KOT PREPARING | kotId={} | orderId={}",
+                kotId,
                 order.getId()
         );
-
 
         return buildResponse(kot);
     }
 
 
     // =====================================================
-    // MARK KOT READY
+    // MARK READY
     // =====================================================
 
     @Transactional
@@ -215,15 +251,7 @@ public class KOTService {
             Long kotId
     ) {
 
-        log.info(
-                "Marking KOT READY | kotId={}",
-                kotId
-        );
-
-
-        KOT kot =
-                getKOT(kotId);
-
+        KOT kot = getKOT(kotId);
 
         if (kot.getStatus() != KOTStatus.PREPARING) {
 
@@ -233,23 +261,16 @@ public class KOTService {
             );
         }
 
+        Order order =
+                getOrder(kot.getOrderId());
+
+        validateDineInOrder(order);
 
         kot.setStatus(
                 KOTStatus.READY
         );
 
-
-        kot =
-                kotRepository.save(kot);
-
-
-        // -------------------------------------------------
-        // UPDATE ORDER
-        // -------------------------------------------------
-
-        Order order =
-                getOrder(kot.getOrderId());
-
+        kot = kotRepository.save(kot);
 
         if (order.getStatus() != OrderStatus.PREPARING) {
 
@@ -259,21 +280,17 @@ public class KOTService {
             );
         }
 
-
         order.setStatus(
                 OrderStatus.READY
         );
 
-
         orderRepository.save(order);
 
-
         log.info(
-                "Order moved to READY | orderId={} | kotId={}",
-                order.getId(),
-                kotId
+                "KOT READY | kotId={} | orderId={}",
+                kotId,
+                order.getId()
         );
-
 
         return buildResponse(kot);
     }
@@ -311,7 +328,6 @@ public class KOTService {
                                 )
                         );
 
-
         return buildResponse(kot);
     }
 
@@ -347,7 +363,7 @@ public class KOTService {
 
 
     // =====================================================
-    // FIND KOT
+    // GET KOT
     // =====================================================
 
     private KOT getKOT(
@@ -366,7 +382,7 @@ public class KOTService {
 
 
     // =====================================================
-    // FIND ORDER
+    // GET ORDER
     // =====================================================
 
     private Order getOrder(
@@ -385,12 +401,49 @@ public class KOTService {
 
 
     // =====================================================
+    // VALIDATE DINE-IN
+    // =====================================================
+
+    private void validateDineInOrder(
+            Order order
+    ) {
+
+        if (order.getOrderType() != OrderType.DINE_IN) {
+
+            throw new RuntimeException(
+                    "KOT is supported only for DINE_IN orders"
+            );
+        }
+
+        if (order.getTableId() == null) {
+
+            throw new RuntimeException(
+                    "DINE_IN order must have a table"
+            );
+        }
+    }
+
+
+    // =====================================================
     // BUILD RESPONSE
     // =====================================================
 
     private KOTResponse buildResponse(
             KOT kot
     ) {
+
+        List<KOTItemResponse> items =
+                kotItemRepository
+                        .findByKotId(kot.getId())
+                        .stream()
+                        .map(item ->
+                                new KOTItemResponse(
+                                        item.getId(),
+                                        item.getFoodItemId(),
+                                        item.getQuantity()
+                                )
+                        )
+                        .toList();
 
         return new KOTResponse(
                 kot.getId(),
@@ -399,7 +452,9 @@ public class KOTService {
                 kot.getStatus(),
                 kot.getGeneratedBy(),
                 kot.getCreatedAt(),
-                kot.getUpdatedAt()
+                kot.getUpdatedAt(),
+                kot.getSubmittedAt(),
+                items
         );
     }
 }
