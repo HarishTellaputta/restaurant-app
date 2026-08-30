@@ -28,6 +28,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
+        System.out.println("🔥 JWT FILTER HIT");
+        System.out.println("🔥 Request URI = " + request.getRequestURI());
+
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null ||
@@ -48,6 +51,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             String role =
                     claims.get("role", String.class);
+
+            System.out.println("JWT userId = " + userId);
+            System.out.println("JWT role = " + role);
+            System.out.println("JWT authority = ROLE_" + role);
 
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(

@@ -14,8 +14,6 @@ public class JwtService {
     private final String secretKey =
             "restaurant-app-secret-key-123456789012345678901234567890";
 
-    private final long expirationTime = 15 * 60 * 1000;
-
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(secretKey.getBytes());
     }
@@ -31,9 +29,6 @@ public class JwtService {
                 .claim("mobile", mobile)
                 .claim("role", role)
                 .issuedAt(new Date())
-                .expiration(
-                        new Date(System.currentTimeMillis() + expirationTime)
-                )
                 .signWith(getSigningKey())
                 .compact();
     }

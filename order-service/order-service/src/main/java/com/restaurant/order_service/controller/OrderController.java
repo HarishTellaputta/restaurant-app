@@ -60,18 +60,17 @@ public class OrderController {
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        OrderResponse response =
+        return ResponseEntity.ok(
                 orderService.getOrderById(
                         id,
                         customerId
-                );
-
-        return ResponseEntity.ok(response);
+                )
+        );
     }
 
 
     // =====================================================
-    // GET MY ORDERS
+    // MY ORDERS
     // =====================================================
 
     @GetMapping("/my-orders")
@@ -82,17 +81,14 @@ public class OrderController {
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        List<OrderResponse> orders =
-                orderService.getMyOrders(
-                        customerId
-                );
-
-        return ResponseEntity.ok(orders);
+        return ResponseEntity.ok(
+                orderService.getMyOrders(customerId)
+        );
     }
 
 
     // =====================================================
-    // GET ORDER STATUS
+    // ORDER STATUS
     // =====================================================
 
     @GetMapping("/{id}/status")
@@ -104,37 +100,12 @@ public class OrderController {
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        OrderStatus status =
+        return ResponseEntity.ok(
                 orderService.getOrderStatus(
                         id,
                         customerId
-                );
-
-        return ResponseEntity.ok(status);
-    }
-
-
-    // =====================================================
-    // CANCEL ORDER
-    // =====================================================
-
-    @PutMapping("/{id}/cancel")
-    public ResponseEntity<Void> cancelOrder(
-            @PathVariable Long id,
-            Authentication authentication
-    ) {
-
-        Long customerId =
-                (Long) authentication.getPrincipal();
-
-        orderService.cancelOrder(
-                id,
-                customerId
+                )
         );
-
-        return ResponseEntity
-                .noContent()
-                .build();
     }
 
 
@@ -156,4 +127,64 @@ public class OrderController {
 
         return ResponseEntity.ok(response);
     }
+
+
+    // =====================================================
+    // CANCEL ORDER
+    // =====================================================
+
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<Void> cancelOrder(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+
+        Long customerId =
+                (Long) authentication.getPrincipal();
+
+        orderService.cancelOrder(
+                id,
+                customerId
+        );
+
+        return ResponseEntity.noContent().build();
+    }
+
+
+    // =====================================================
+    // GET ORDER BY BOOKING
+    // =====================================================
+
+    @GetMapping("/booking/{bookingId}")
+    public ResponseEntity<OrderResponse> getOrderByBookingId(
+            @PathVariable Long bookingId,
+            Authentication authentication
+    ) {
+
+        Long customerId =
+                (Long) authentication.getPrincipal();
+
+        return ResponseEntity.ok(
+                orderService.getOrderByBookingId(
+                        bookingId,
+                        customerId
+                )
+        );
+    }
+
+
+    // =====================================================
+    // INTERNAL CANCEL
+    // =====================================================
+
+    @PutMapping("/internal/{id}/cancel")
+    public ResponseEntity<Void> cancelBookingOrder(
+            @PathVariable Long id
+    ) {
+
+        orderService.cancelOrderInternal(id);
+
+        return ResponseEntity.noContent().build();
+    }
 }
+

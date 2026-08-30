@@ -9,11 +9,13 @@ import com.restaurant.restaurant_service.entity.TableStatus;
 import com.restaurant.restaurant_service.repository.RestaurantTableRepository;
 import com.restaurant.restaurant_service.repository.TableBookingRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TableBookingService {
@@ -32,6 +34,15 @@ public class TableBookingService {
             TableBookingRequest request
     ) {
 
+        log.info(
+                "Creating table booking. customerId={}, tableId={}, date={}, time={}, guests={}",
+                customerId,
+                request.tableId(),
+                request.bookingDate(),
+                request.bookingTime(),
+                request.guests()
+        );
+
         RestaurantTable table =
                 tableRepository.findById(request.tableId())
                         .orElseThrow(() ->
@@ -41,13 +52,13 @@ public class TableBookingService {
                                 )
                         );
 
-        if (!table.getActive()) {
-            throw new RuntimeException(
-                    "Table is inactive"
-            );
+        if (!Boolean.TRUE.equals(table.getActive())) {
+
+            throw new RuntimeException("Table is inactive");
         }
 
         if (request.guests() > table.getCapacity()) {
+
             throw new RuntimeException(
                     "Guest count exceeds table capacity"
             );
@@ -63,15 +74,16 @@ public class TableBookingService {
                         );
 
         if (alreadyBooked) {
+
             throw new RuntimeException(
                     "Table is already booked for this time"
             );
         }
 
         if (table.getStatus() != TableStatus.AVAILABLE) {
+
             throw new RuntimeException(
-                    "Table is currently "
-                            + table.getStatus()
+                    "Table is currently " + table.getStatus()
             );
         }
 
@@ -92,9 +104,15 @@ public class TableBookingService {
 
         tableRepository.save(table);
 
+        log.info(
+                "Booking created successfully | bookingId={} | customerId={} | tableId={}",
+                savedBooking.getId(),
+                customerId,
+                savedBooking.getTableId()
+        );
+
         return mapToResponse(savedBooking);
     }
-
 
     // =========================
     // CUSTOMER BOOKINGS
@@ -104,25 +122,67 @@ public class TableBookingService {
             Long customerId
     ) {
 
-        return bookingRepository
-                .findByCustomerId(customerId)
-                .stream()
-                .map(this::mapToResponse)
-                .toList();
+        log.info(
+                "Fetching bookings for customer. customerId={}",
+                customerId
+        );
+
+        List<TableBookingResponse> bookings =
+                bookingRepository
+                        .findByCustomerId(customerId)
+                        .stream()
+                        .map(this::mapToResponse)
+                        .toList();
+
+        log.info(
+                "Customer bookings fetched successfully. customerId={}, bookingCount={}",
+                customerId,
+                bookings.size()
+        );
+
+        return bookings;
     }
 
-    public TableBookingResponse getBookingById(Long bookingId) {
+
+    // =========================
+    // GET BOOKING BY ID
+    // =========================
+
+    public TableBookingResponse getBookingById(
+            Long bookingId
+    ) {
+
+        log.info(
+                "Fetching booking by id. bookingId={}",
+                bookingId
+        );
 
         TableBooking booking =
                 bookingRepository.findById(bookingId)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Booking not found with id: " + bookingId
-                                )
-                        );
+                        .orElseThrow(() -> {
+
+                            log.warn(
+                                    "Booking not found. bookingId={}",
+                                    bookingId
+                            );
+
+                            return new RuntimeException(
+                                    "Booking not found with id: "
+                                            + bookingId
+                            );
+                        });
+
+        log.debug(
+                "Booking found. bookingId={}, customerId={}, tableId={}, status={}",
+                booking.getId(),
+                booking.getCustomerId(),
+                booking.getTableId(),
+                booking.getStatus()
+        );
 
         return mapToResponse(booking);
     }
+
 
     // =========================
     // RESPONSE MAPPER

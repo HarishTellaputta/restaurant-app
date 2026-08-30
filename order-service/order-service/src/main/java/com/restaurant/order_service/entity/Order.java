@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "orders")
 @Getter
@@ -21,9 +22,10 @@ public class Order {
     @Column(nullable = false)
     private Long customerId;
 
+    // Optional for walk-in orders
     private Long tableId;
 
-    // NULL for walk-in orders
+    // Optional for pre-booking / celebration orders
     private Long bookingId;
 
     @Column(nullable = false, precision = 10, scale = 2)
