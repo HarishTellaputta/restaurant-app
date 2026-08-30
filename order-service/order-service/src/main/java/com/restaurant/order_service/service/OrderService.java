@@ -9,6 +9,7 @@ import com.restaurant.order_service.entity.OrderStatus;
 import com.restaurant.order_service.repository.OrderItemRepository;
 import com.restaurant.order_service.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ import java.util.List;
 
 import static org.springframework.http.HttpStatus.ACCEPTED;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderService {
@@ -334,40 +336,125 @@ public class OrderService {
             OrderStatus newStatus
     ) {
 
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                "Order not found with id: " + orderId
-                        ));
+        log.info(
+                "Updating order status | orderId={} | newStatus={}",
+                orderId,
+                newStatus
+        );
 
-        OrderStatus currentStatus = order.getStatus();
+        Order order =
+                orderRepository.findById(orderId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Order not found with id: "
+                                                + orderId
+                                )
+                        );
+
+        OrderStatus currentStatus =
+                order.getStatus();
+
+
+        if (currentStatus == null) {
+
+            throw new RuntimeException(
+                    "Order status is missing"
+            );
+        }
+
+
+        if (newStatus == null) {
+
+            throw new RuntimeException(
+                    "New order status is required"
+            );
+        }
+
+
+        // =====================================================
+        // TERMINAL STATES
+        // =====================================================
 
         if (currentStatus == OrderStatus.CANCELLED) {
+
             throw new RuntimeException(
                     "Cancelled order cannot be updated"
             );
         }
 
+
         if (currentStatus == OrderStatus.COMPLETED) {
+
             throw new RuntimeException(
                     "Completed order cannot be updated"
             );
         }
 
-        if (!isValidTransition(currentStatus, newStatus)) {
+
+        // =====================================================
+        // RESTAURANT ACCEPTANCE
+        // =====================================================
+
+        if (
+                currentStatus == OrderStatus.PLACED
+                        && newStatus == OrderStatus.ACCEPTED
+        ) {
+
+            order.setStatus(
+                    OrderStatus.ACCEPTED
+            );
+
+            order =
+                    orderRepository.save(order);
+
+            log.info(
+                    "Order accepted by restaurant | orderId={} | {} -> {}",
+                    orderId,
+                    currentStatus,
+                    newStatus
+            );
+
+            return buildOrderResponse(order);
+        }
+
+
+        // =====================================================
+        // KITCHEN STATUS
+        // =====================================================
+
+        if (
+                newStatus == OrderStatus.PREPARING
+                        || newStatus == OrderStatus.READY
+        ) {
+
             throw new RuntimeException(
-                    "Invalid order status transition: "
-                            + currentStatus
-                            + " -> "
-                            + newStatus
+                    "PREPARING and READY status must be controlled through KOT"
             );
         }
 
-        order.setStatus(newStatus);
 
-        order = orderRepository.save(order);
+        // =====================================================
+        // COMPLETED
+        // =====================================================
 
-        return buildOrderResponse(order);
+        if (newStatus == OrderStatus.COMPLETED) {
+
+            throw new RuntimeException(
+                    "Order can be completed only through the delivery flow"
+            );
+        }
+
+
+        // =====================================================
+        // INVALID TRANSITION
+        // =====================================================
+
+        throw new RuntimeException(
+                "Invalid order status transition: "
+                        + currentStatus
+                        + " -> "
+                        + newStatus
+        );
     }
 
     private boolean isValidTransition(

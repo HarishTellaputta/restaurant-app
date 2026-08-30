@@ -8,6 +8,7 @@ import com.restaurant.order_service.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,9 +21,13 @@ public class OrderController {
 
     private final OrderService orderService;
 
+
+    // =====================================================
+    // CREATE ORDER
+    // =====================================================
+
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public OrderResponse createOrder(
+    public ResponseEntity<OrderResponse> createOrder(
             Authentication authentication,
             @Valid @RequestBody CreateOrderRequest request
     ) {
@@ -30,14 +35,24 @@ public class OrderController {
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        return orderService.createOrder(
-                customerId,
-                request
-        );
+        OrderResponse response =
+                orderService.createOrder(
+                        customerId,
+                        request
+                );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
     }
+
+
+    // =====================================================
+    // GET ORDER BY ID
+    // =====================================================
 
     @GetMapping("/{id}")
-    public OrderResponse getOrderById(
+    public ResponseEntity<OrderResponse> getOrderById(
             @PathVariable Long id,
             Authentication authentication
     ) {
@@ -45,25 +60,43 @@ public class OrderController {
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        return orderService.getOrderById(
-                id,
-                customerId
-        );
+        OrderResponse response =
+                orderService.getOrderById(
+                        id,
+                        customerId
+                );
+
+        return ResponseEntity.ok(response);
     }
+
+
+    // =====================================================
+    // GET MY ORDERS
+    // =====================================================
 
     @GetMapping("/my-orders")
-    public List<OrderResponse> getMyOrders(
+    public ResponseEntity<List<OrderResponse>> getMyOrders(
             Authentication authentication
     ) {
 
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        return orderService.getMyOrders(customerId);
+        List<OrderResponse> orders =
+                orderService.getMyOrders(
+                        customerId
+                );
+
+        return ResponseEntity.ok(orders);
     }
 
+
+    // =====================================================
+    // GET ORDER STATUS
+    // =====================================================
+
     @GetMapping("/{id}/status")
-    public OrderStatus getOrderStatus(
+    public ResponseEntity<OrderStatus> getOrderStatus(
             @PathVariable Long id,
             Authentication authentication
     ) {
@@ -71,15 +104,22 @@ public class OrderController {
         Long customerId =
                 (Long) authentication.getPrincipal();
 
-        return orderService.getOrderStatus(
-                id,
-                customerId
-        );
+        OrderStatus status =
+                orderService.getOrderStatus(
+                        id,
+                        customerId
+                );
+
+        return ResponseEntity.ok(status);
     }
 
+
+    // =====================================================
+    // CANCEL ORDER
+    // =====================================================
+
     @PutMapping("/{id}/cancel")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void cancelOrder(
+    public ResponseEntity<Void> cancelOrder(
             @PathVariable Long id,
             Authentication authentication
     ) {
@@ -91,17 +131,29 @@ public class OrderController {
                 id,
                 customerId
         );
+
+        return ResponseEntity
+                .noContent()
+                .build();
     }
 
+
+    // =====================================================
+    // UPDATE ORDER STATUS
+    // =====================================================
+
     @PutMapping("/{id}/status")
-    public OrderResponse updateOrderStatus(
+    public ResponseEntity<OrderResponse> updateOrderStatus(
             @PathVariable Long id,
             @Valid @RequestBody UpdateOrderStatusRequest request
     ) {
 
-        return orderService.updateOrderStatus(
-                id,
-                request.status()
-        );
+        OrderResponse response =
+                orderService.updateOrderStatus(
+                        id,
+                        request.status()
+                );
+
+        return ResponseEntity.ok(response);
     }
 }
