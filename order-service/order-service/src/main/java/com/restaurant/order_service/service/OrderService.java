@@ -529,16 +529,6 @@ public class OrderService {
          * DELIVERY ORDER
          *
          * Currently distance/weather services are not available.
-         *
-         * Therefore:
-         *
-         * distance = null
-         * weather = null
-         * peakTime = false
-         *
-         * Order creation will continue normally.
-         *
-         * Later these values can come from external services.
          */
 
         else {
@@ -654,11 +644,6 @@ public class OrderService {
                     BigDecimal.ZERO;
 
 
-            /*
-             * Only calculate distance charge when
-             * distance information is available.
-             */
-
             if (distanceKm != null && distanceKm > 0) {
 
                 /*
@@ -666,9 +651,6 @@ public class OrderService {
                  *
                  * First 3 KM  = ₹30
                  * Every extra KM = ₹10
-                 *
-                 * Keep this logic in a separate
-                 * DeliveryPricingService later.
                  */
 
                 if (distanceKm <= 3) {
@@ -702,12 +684,6 @@ public class OrderService {
 
             if (Boolean.TRUE.equals(peakTime)) {
 
-                /*
-                 * FUTURE:
-                 *
-                 * Example peak charge = ₹20
-                 */
-
                 peakCharge =
                         BigDecimal.valueOf(20);
             }
@@ -726,16 +702,6 @@ public class OrderService {
                 String weather =
                         weatherCondition.toLowerCase();
 
-
-                /*
-                 * FUTURE:
-                 *
-                 * Rain = ₹20
-                 * Heavy rain = ₹30
-                 * Extreme heat = ₹10
-                 *
-                 * Keep pricing configurable later.
-                 */
 
                 if (
                         weather.contains("rain")
@@ -788,13 +754,8 @@ public class OrderService {
 
 
         /*
-         * IMPORTANT:
-         *
-         * If your Order entity already has:
-         *
-         * private BigDecimal deliveryCharge;
-         *
-         * then uncomment:
+         * If Order entity contains deliveryCharge,
+         * you can add:
          *
          * order.setDeliveryCharge(deliveryCharge);
          */
@@ -830,7 +791,6 @@ public class OrderService {
 
         return buildOrderResponse(order);
     }
-
 
 
     // =====================================================
@@ -998,6 +958,7 @@ public class OrderService {
                 customerId
         );
 
+
         Order order =
                 orderRepository
                         .findFirstByCustomerIdAndBookingId(
@@ -1017,6 +978,7 @@ public class OrderService {
                                             + bookingId
                             );
                         });
+
 
         return buildOrderResponse(order);
     }
@@ -1253,6 +1215,30 @@ public class OrderService {
         );
 
 
+        // -------------------------------------------------
+        // VALIDATE INPUT
+        // -------------------------------------------------
+
+        if (orderId == null) {
+
+            throw new RuntimeException(
+                    "Order id is required"
+            );
+        }
+
+
+        if (newStatus == null) {
+
+            throw new RuntimeException(
+                    "New order status is required"
+            );
+        }
+
+
+        // -------------------------------------------------
+        // FIND ORDER
+        // -------------------------------------------------
+
         Order order =
                 orderRepository.findById(orderId)
                         .orElseThrow(() ->
@@ -1266,6 +1252,26 @@ public class OrderService {
         OrderStatus currentStatus =
                 order.getStatus();
 
+
+        if (currentStatus == null) {
+
+            throw new RuntimeException(
+                    "Order status is missing"
+            );
+        }
+
+
+        log.debug(
+                "Current order status | orderId={} | currentStatus={} | requestedStatus={}",
+                orderId,
+                currentStatus,
+                newStatus
+        );
+
+
+        // =====================================================
+        // TERMINAL STATES
+        // =====================================================
 
         if (currentStatus == OrderStatus.CANCELLED) {
 
@@ -1283,36 +1289,134 @@ public class OrderService {
         }
 
 
-        if (!isValidTransition(
-                currentStatus,
-                newStatus
-        )) {
+        // =====================================================
+        // RESTAURANT ACCEPTANCE
+        // =====================================================
+
+        /*
+         * Restaurant can accept a newly placed order.
+         *
+         * PLACED -> ACCEPTED
+         */
+
+        if (
+                currentStatus == OrderStatus.PLACED
+                        && newStatus == OrderStatus.ACCEPTED
+        ) {
+
+            order.setStatus(
+                    OrderStatus.ACCEPTED
+            );
+
+
+            order =
+                    orderRepository.save(order);
+
+
+            log.info(
+                    "Order accepted by restaurant | orderId={} | {} -> {}",
+                    orderId,
+                    currentStatus,
+                    newStatus
+            );
+
+
+            return buildOrderResponse(order);
+        }
+
+
+        // =====================================================
+        // KOT CONTROLLED STATUS
+        // =====================================================
+
+        /*
+         * PREPARING and READY are controlled through KOT.
+         *
+         * ACCEPTED -> PREPARING
+         * PREPARING -> READY
+         */
+
+        if (
+                newStatus == OrderStatus.PREPARING
+                        || newStatus == OrderStatus.READY
+        ) {
+
+            log.warn(
+                    "Attempt to update KOT controlled status | orderId={} | currentStatus={} | requestedStatus={}",
+                    orderId,
+                    currentStatus,
+                    newStatus
+            );
+
 
             throw new RuntimeException(
-                    "Invalid order status transition: "
-                            + currentStatus
-                            + " -> "
-                            + newStatus
+                    "PREPARING and READY status must be controlled through KOT"
             );
         }
 
 
-        order.setStatus(newStatus);
+        // =====================================================
+        // COMPLETED
+        // =====================================================
+
+        /*
+         * COMPLETED should happen through the
+         * delivery/order completion flow.
+         */
+
+        if (newStatus == OrderStatus.COMPLETED) {
+
+            log.warn(
+                    "Attempt to complete order through restaurant status API | orderId={} | currentStatus={}",
+                    orderId,
+                    currentStatus
+            );
 
 
-        order =
-                orderRepository.save(order);
+            throw new RuntimeException(
+                    "Order can be completed only through the delivery flow"
+            );
+        }
 
 
-        log.info(
-                "Order status updated successfully | orderId={} | {} -> {}",
+        // =====================================================
+        // CANCELLED
+        // =====================================================
+
+        /*
+         * Cancellation is handled separately through:
+         *
+         * cancelOrder()
+         * cancelOrderByBooking()
+         * cancelOrderInternal()
+         */
+
+        if (newStatus == OrderStatus.CANCELLED) {
+
+            throw new RuntimeException(
+                    "Order cancellation must be handled through the cancellation flow"
+            );
+        }
+
+
+        // =====================================================
+        // INVALID TRANSITION
+        // =====================================================
+
+        log.warn(
+                "Invalid order status transition | orderId={} | {} -> {}",
                 orderId,
                 currentStatus,
                 newStatus
         );
 
 
-        return buildOrderResponse(order);
+        throw new RuntimeException(
+                "Invalid order status transition: "
+                        + currentStatus
+                        + " -> "
+                        + newStatus
+        );
     }
 
 
@@ -1322,7 +1426,9 @@ public class OrderService {
 
     public List<OrderResponse> getAllOrders() {
 
-        log.info("Admin fetching all orders");
+        log.info(
+                "Admin fetching all orders"
+        );
 
 
         return orderRepository
@@ -1416,43 +1522,4 @@ public class OrderService {
                 .map(this::buildOrderResponse)
                 .toList();
     }
-
-
-    // =====================================================
-    // VALID STATUS TRANSITION
-    // =====================================================
-
-    private boolean isValidTransition(
-            OrderStatus currentStatus,
-            OrderStatus newStatus
-    ) {
-
-        if (currentStatus == null || newStatus == null) {
-            return false;
-        }
-
-        switch (currentStatus) {
-
-            case PLACED:
-                return newStatus == OrderStatus.ACCEPTED
-                        || newStatus == OrderStatus.CANCELLED;
-
-            case ACCEPTED:
-                return newStatus == OrderStatus.PREPARING;
-
-            case PREPARING:
-                return newStatus == OrderStatus.READY;
-
-            case READY:
-                return newStatus == OrderStatus.COMPLETED;
-
-            case COMPLETED:
-            case CANCELLED:
-                return false;
-
-            default:
-                return false;
-        }
-    }
 }
-

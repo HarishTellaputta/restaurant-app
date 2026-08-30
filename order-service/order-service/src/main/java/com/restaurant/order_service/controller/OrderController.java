@@ -2,6 +2,7 @@ package com.restaurant.order_service.controller;
 
 import com.restaurant.order_service.dto.CreateOrderRequest;
 import com.restaurant.order_service.dto.OrderResponse;
+import com.restaurant.order_service.dto.UpdateOrderStatusRequest;
 import com.restaurant.order_service.entity.OrderStatus;
 import com.restaurant.order_service.service.OrderService;
 import jakarta.validation.Valid;
@@ -109,6 +110,26 @@ public class OrderController {
 
 
     // =====================================================
+    // UPDATE ORDER STATUS
+    // =====================================================
+
+    @PutMapping("/{id}/status")
+    public ResponseEntity<OrderResponse> updateOrderStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateOrderStatusRequest request
+    ) {
+
+        OrderResponse response =
+                orderService.updateOrderStatus(
+                        id,
+                        request.status()
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+
+    // =====================================================
     // CANCEL ORDER
     // =====================================================
 
@@ -166,3 +187,4 @@ public class OrderController {
         return ResponseEntity.noContent().build();
     }
 }
+
