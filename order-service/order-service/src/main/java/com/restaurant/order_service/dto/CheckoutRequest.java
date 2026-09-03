@@ -2,22 +2,17 @@ package com.restaurant.order_service.dto;
 
 import com.restaurant.order_service.entity.OrderType;
 import com.restaurant.order_service.entity.PaymentMethod;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.FutureOrPresent;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.List;
-public record CreateOrderRequest(
 
-        @NotNull
+public record CheckoutRequest(
+
         OrderType orderType,
 
-        @NotNull
         PaymentMethod paymentMethod,
 
+        // DINE_IN
         Long tableId,
 
         Boolean tableBooking,
@@ -26,16 +21,15 @@ public record CreateOrderRequest(
 
         LocalTime bookingTime,
 
+        // DELIVERY
         Double distanceKm,
 
         Boolean peakTime,
 
         String weather,
 
-        String couponCode,
-
-        @NotEmpty
-        List<@Valid CreateOrderItemRequest> items
+        // Optional coupon
+        String couponCode
 
 ) {
 }

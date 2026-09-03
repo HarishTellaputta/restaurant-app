@@ -63,4 +63,23 @@ public class TableBookingController {
 
         return bookingService.getBookingById(id);
     }
+
+    // =====================================================
+// CUSTOMER - CANCEL BOOKING
+// =====================================================
+
+    @PutMapping("/{id}/cancel")
+    public TableBookingResponse cancelBooking(
+            Authentication authentication,
+            @PathVariable Long id
+    ) {
+
+        Long customerId =
+                (Long) authentication.getPrincipal();
+
+        return bookingService.cancelBooking(
+                customerId,
+                id
+        );
+    }
 }

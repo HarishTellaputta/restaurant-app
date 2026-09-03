@@ -16,7 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/kots")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+//@PreAuthorize("hasRole('ADMIN')")
 public class KOTController {
 
     private final KOTService kotService;
@@ -147,5 +147,21 @@ public class KOTController {
         return ResponseEntity.ok(
                 kotService.getKOTsByStatus(status)
         );
+    }
+
+    @PostMapping("/order/{orderId}/generate")
+    public ResponseEntity<KOTResponse> generateDeliveryKOT(
+            @PathVariable Long orderId,
+            @RequestParam(required = false) String generatedBy
+    ) {
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(
+                        kotService.generateDeliveryKOT(
+                                orderId,
+                                generatedBy
+                        )
+                );
     }
 }

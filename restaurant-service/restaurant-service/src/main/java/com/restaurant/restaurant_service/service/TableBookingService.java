@@ -183,6 +183,103 @@ public class TableBookingService {
         return mapToResponse(booking);
     }
 
+    // =========================
+// CANCEL BOOKING
+// =========================
+
+    @Transactional
+    public TableBookingResponse cancelBooking(
+            Long customerId,
+            Long bookingId
+    ) {
+
+        log.info(
+                "Cancelling table booking | customerId={} | bookingId={}",
+                customerId,
+                bookingId
+        );
+
+        // -------------------------------------------------
+        // GET BOOKING
+        // -------------------------------------------------
+
+        TableBooking booking =
+                bookingRepository.findById(bookingId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Booking not found with id: "
+                                                + bookingId
+                                )
+                        );
+
+        // -------------------------------------------------
+        // CHECK CUSTOMER OWNERSHIP
+        // -------------------------------------------------
+
+        if (!booking.getCustomerId().equals(customerId)) {
+
+            throw new RuntimeException(
+                    "You are not allowed to cancel this booking"
+            );
+        }
+
+        // -------------------------------------------------
+        // CHECK BOOKING STATUS
+        // -------------------------------------------------
+
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+
+            throw new RuntimeException(
+                    "Booking is already cancelled"
+            );
+        }
+
+        if (booking.getStatus() != BookingStatus.CONFIRMED) {
+
+            throw new RuntimeException(
+                    "Only confirmed bookings can be cancelled"
+            );
+        }
+
+        // -------------------------------------------------
+        // UPDATE BOOKING STATUS
+        // -------------------------------------------------
+
+        booking.setStatus(
+                BookingStatus.CANCELLED
+        );
+
+        TableBooking savedBooking =
+                bookingRepository.save(booking);
+
+        // -------------------------------------------------
+        // MAKE TABLE AVAILABLE
+        // -------------------------------------------------
+
+        RestaurantTable table =
+                tableRepository.findById(
+                        booking.getTableId()
+                ).orElse(null);
+
+        if (table != null) {
+
+            table.setStatus(
+                    TableStatus.AVAILABLE
+            );
+
+            tableRepository.save(table);
+        }
+
+        log.info(
+                "Table booking cancelled successfully | bookingId={} | customerId={} | tableId={}",
+                bookingId,
+                customerId,
+                booking.getTableId()
+        );
+
+        return mapToResponse(savedBooking);
+    }
+
 
     // =========================
     // RESPONSE MAPPER

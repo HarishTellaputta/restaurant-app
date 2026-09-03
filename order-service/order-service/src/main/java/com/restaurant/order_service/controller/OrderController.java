@@ -1,9 +1,6 @@
 package com.restaurant.order_service.controller;
 
-import com.restaurant.order_service.dto.AddDineInItemsRequest;
-import com.restaurant.order_service.dto.CreateOrderRequest;
-import com.restaurant.order_service.dto.OrderResponse;
-import com.restaurant.order_service.dto.UpdateOrderStatusRequest;
+import com.restaurant.order_service.dto.*;
 import com.restaurant.order_service.entity.OrderStatus;
 import com.restaurant.order_service.service.OrderService;
 import jakarta.validation.Valid;
@@ -188,22 +185,98 @@ public class OrderController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/dine-in/start")
+    public ResponseEntity<OrderResponse> startDineInOrder(
+            @Valid @RequestBody StartDineInOrderRequest request
+    ) {
+
+        OrderResponse response =
+                orderService.startDineInOrder(
+                        request.customerId()
+                );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
+    }
+
+    // =====================================================
+// ATTACH CUSTOMER TO DINE-IN ORDER
+// =====================================================
+
+    @PutMapping("/{orderId}/customer")
+    public ResponseEntity<OrderResponse> attachCustomer(
+            @PathVariable Long orderId,
+            @Valid @RequestBody AttachCustomerRequest request
+    ) {
+
+        return ResponseEntity.ok(
+                orderService.attachCustomer(
+                        orderId,
+                        request.customerId()
+                )
+        );
+    }
+
     @PostMapping("/{orderId}/dine-in/items")
     public ResponseEntity<OrderResponse> addDineInItems(
             @PathVariable Long orderId,
-            @Valid @RequestBody AddDineInItemsRequest request )
-    { return ResponseEntity.ok( orderService.addDineInItems( orderId, request ) );
+            @Valid @RequestBody AddDineInItemsRequest request
+    ) {
+
+        return ResponseEntity.ok(
+                orderService.addDineInItems(
+                        orderId,
+                        request
+                )
+        );
     }
 
     @PostMapping("/{orderId}/dine-in/send-to-kitchen")
-    public ResponseEntity<Long> sendItemsToKitchen(@PathVariable Long orderId, @RequestParam(required = false) String generatedBy) {
-        Long kotId = orderService.sendItemsToKitchen(orderId, generatedBy);
-        return ResponseEntity.status(HttpStatus.CREATED).body(kotId);
+    public ResponseEntity<Long> sendItemsToKitchen(
+            @PathVariable Long orderId,
+            @RequestParam(required = false) String generatedBy
+    ) {
+
+        Long kotId =
+                orderService.sendItemsToKitchen(
+                        orderId,
+                        generatedBy
+                );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(kotId);
     }
-    // ===================================================== // FINAL SUBMIT DINE-IN ORDER // =====================================================
     @PutMapping("/{orderId}/dine-in/final-submit")
-    public ResponseEntity<OrderResponse> finalSubmitDineInOrder(@PathVariable Long orderId) {
-        return ResponseEntity.ok(orderService.finalSubmitDineInOrder(orderId));
+    public ResponseEntity<OrderResponse> finalSubmitDineInOrder(
+            @PathVariable Long orderId
+    ) {
+
+        return ResponseEntity.ok(
+                orderService.finalSubmitDineInOrder(orderId)
+        );
     }
+
+    @PostMapping("/from-cart")
+    public ResponseEntity<OrderResponse> createOrderFromCart(
+            Authentication authentication,
+            @Valid @RequestBody CheckoutRequest request
+    ) {
+
+        Long customerId =
+                (Long) authentication.getPrincipal();
+
+        OrderResponse response =
+                orderService.createOrderFromCart(
+                        customerId,
+                        request
+                );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
+    }
+
 }
 
