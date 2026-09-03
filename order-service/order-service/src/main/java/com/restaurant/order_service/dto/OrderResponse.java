@@ -14,6 +14,17 @@ public record OrderResponse(
         Long tableId,
 
         Long bookingId,
+        boolean tableBooking,
+
+        BigDecimal subtotal,
+
+        BigDecimal discount,
+
+        BigDecimal deliveryCharge,
+
+        BigDecimal platformFee,
+
+        BigDecimal tax,
 
         BigDecimal totalAmount,
 

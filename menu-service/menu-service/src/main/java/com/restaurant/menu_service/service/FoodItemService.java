@@ -72,6 +72,15 @@ public class FoodItemService {
                 .toList();
     }
 
+    public List<FoodItemResponse> searchFoodItems(String keyword) {
+
+        return foodItemRepository
+                .findByNameContainingIgnoreCase(keyword)
+                .stream()
+                .map(this::responseMapper)
+                .toList();
+    }
+
 
     // =========================
     // GET BY ID

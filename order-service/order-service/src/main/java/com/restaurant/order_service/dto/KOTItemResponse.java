@@ -4,7 +4,7 @@ public record KOTItemResponse(
 
         Long id,
 
-        Long foodItemId,
+        String foodItemName,
 
         Integer quantity
 ) {

@@ -1,8 +1,9 @@
 package com.restaurant.order_service.dto;
 
+
 import java.math.BigDecimal;
 
-public record OrderItemResponse(
+public record CartItemResponse(
 
         Long id,
 

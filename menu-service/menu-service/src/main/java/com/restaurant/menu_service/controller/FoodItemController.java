@@ -35,6 +35,13 @@ public class FoodItemController {
         return foodItemService.getAllFoodItems();
     }
 
+    @GetMapping("/search")
+    public List<FoodItemResponse> searchFoodItems(
+            @RequestParam String keyword) {
+
+        return foodItemService.searchFoodItems(keyword);
+    }
+
     @GetMapping("/{id}")
     public FoodItemResponse getFoodItemById(
             @PathVariable Long id) {

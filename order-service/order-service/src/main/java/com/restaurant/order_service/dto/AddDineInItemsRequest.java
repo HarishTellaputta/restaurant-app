@@ -2,26 +2,27 @@ package com.restaurant.order_service.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 public record AddDineInItemsRequest(
 
-        @NotEmpty(message = "At least one item is required")
-        @Valid
-        List<ItemRequest> items
+        @NotEmpty
+        List<@Valid ItemRequest> items
 
 ) {
 
     public record ItemRequest(
 
+            @NotNull
             Long foodItemId,
 
-            Integer quantity,
+            @NotNull
+            @Positive
+            Integer quantity
 
-            BigDecimal price
     ) {
     }
 }
-

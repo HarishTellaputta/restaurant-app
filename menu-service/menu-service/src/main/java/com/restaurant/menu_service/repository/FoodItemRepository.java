@@ -11,4 +11,6 @@ public interface FoodItemRepository extends JpaRepository<FoodItem, Long> {
     boolean existsByName(String name);
 
     List<FoodItem> findByCategoryId(Long categoryId);
+        List<FoodItem> findByNameContainingIgnoreCase(String keyword);
+
 }
